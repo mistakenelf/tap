@@ -1,15 +1,15 @@
 use syntect::easy::HighlightFile;
 use syntect::highlighting::{Style, ThemeSet};
 use syntect::parsing::SyntaxSet;
+use syntect::util::as_24_bit_terminal_escaped;
 
-use std::error::Error;
+use std::io::BufRead;
 use std::{env, fs, process};
 
 pub struct App {
     pub file_path: String,
-    pub syntax_set: SyntaxSet,
-    pub theme_set: ThemeSet,
     pub file_content: String,
+    pub highlighted_lines: Vec<String>,
 }
 
 impl App {
@@ -18,30 +18,89 @@ impl App {
             return Err("Not enough arguments");
         }
 
-        let file_path = args[1].clone();
-        let syntax_set = SyntaxSet::load_defaults_newlines();
-        let theme_set = ThemeSet::load_defaults();
+        let file_path = args[1].to_string();
 
         Ok(App {
             file_path,
-            syntax_set,
-            theme_set,
             file_content: "".to_string(),
+            highlighted_lines: Vec::new(),
         })
     }
 
-    pub fn set_file_content(&mut self) -> Result<(), Box<dyn Error>> {
-        let file_content = fs::read_to_string(&self.file_path.to_string())?;
+    pub fn set_file_content(&mut self) {
+        let file_content_result = fs::read_to_string(&self.file_path.to_string());
 
-        self.file_content = file_content;
-
-        Ok(())
+        match file_content_result {
+            Ok(content) => self.file_content = content.to_string(),
+            Err(error) => {
+                println!("Error reading file: {error}");
+                process::exit(1);
+            }
+        };
     }
 
-    pub fn print_contents(&self) {
-        let file_content = &self.file_content.to_string();
-        println!("{file_content}");
+    pub fn get_highlighted_lines(&mut self) {
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        let theme_set = ThemeSet::load_defaults();
+
+        let mut highlighter = HighlightFile::new(
+            &self.file_path,
+            &syntax_set,
+            &theme_set.themes["base16-ocean.dark"],
+        )
+        .unwrap();
+
+        for line_result in highlighter.reader.lines() {
+            let line = line_result.unwrap();
+            let regions: Vec<(Style, &str)> = highlighter
+                .highlight_lines
+                .highlight_line(&line, &syntax_set)
+                .unwrap();
+
+            self.highlighted_lines
+                .push(as_24_bit_terminal_escaped(&regions[..], false));
+        }
     }
+
+    pub fn print_file_details(&self) {
+        let metadata_result = fs::metadata(&self.file_path);
+
+        match metadata_result {
+            Ok(meta) => {
+                println!("File Size: {}", format_size(meta.len()));
+            }
+            Err(error) => {
+                println!("Error getting file metadata: {error}");
+            }
+        }
+    }
+
+    pub fn print_file_content(&self) {
+        for line in &self.highlighted_lines {
+            println!("{line}");
+        }
+    }
+}
+
+fn format_size(size: u64) -> String {
+    if size < 1000 {
+        return format!("{}B", size);
+    }
+
+    let suffix = vec!["K", "M", "G", "T", "P", "E", "Z", "Y"];
+    let mut current_size = size as f64 / 1000 as f64;
+
+    for s in suffix.iter() {
+        if current_size < 10.0 {
+            return format!("{:.1}{}", current_size - 0.0499 as f64, s);
+        } else if current_size < 1000.0 {
+            return format!("{:.1}{}", current_size, s);
+        }
+
+        current_size /= 1000.0
+    }
+
+    return "".to_string();
 }
 
 pub fn run() {
@@ -51,10 +110,8 @@ pub fn run() {
         process::exit(1);
     });
 
-    if let Err(e) = app.set_file_content() {
-        println!("Error reading file content: {e}");
-        process::exit(1);
-    }
-
-    app.print_contents();
+    app.set_file_content();
+    app.get_highlighted_lines();
+    app.print_file_details();
+    app.print_file_content();
 }
