@@ -50,15 +50,20 @@ impl App {
         )
         .unwrap();
 
-        for line_result in highlighter.reader.lines() {
-            let line = line_result.unwrap();
-            let regions: Vec<(Style, &str)> = highlighter
-                .highlight_lines
-                .highlight_line(&line, &syntax_set)
-                .unwrap();
+        let mut line = String::new();
 
-            self.highlighted_lines
-                .push(as_24_bit_terminal_escaped(&regions[..], false));
+        while highlighter.reader.read_line(&mut line).unwrap() > 0 {
+            {
+                let regions: Vec<(Style, &str)> = highlighter
+                    .highlight_lines
+                    .highlight_line(&line, &syntax_set)
+                    .unwrap();
+
+                self.highlighted_lines
+                    .push(as_24_bit_terminal_escaped(&regions[..], false));
+            }
+
+            line.clear();
         }
     }
 
@@ -77,7 +82,7 @@ impl App {
 
     pub fn print_file_content(&self) {
         for line in &self.highlighted_lines {
-            println!("{line}");
+            print!("{line}");
         }
     }
 }
