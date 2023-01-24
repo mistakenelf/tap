@@ -1,10 +1,15 @@
+use std::io::BufRead;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::{env, fs, process};
+
+use chrono::{DateTime, Local};
 use syntect::easy::HighlightFile;
 use syntect::highlighting::{Style, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::as_24_bit_terminal_escaped;
 
-use std::io::BufRead;
-use std::{env, fs, process};
+mod formatter;
 
 pub struct App {
     pub file_path: String,
@@ -22,7 +27,7 @@ impl App {
 
         Ok(App {
             file_path,
-            file_content: "".to_string(),
+            file_content: String::from(""),
             highlighted_lines: Vec::new(),
         })
     }
@@ -72,7 +77,20 @@ impl App {
 
         match metadata_result {
             Ok(meta) => {
-                println!("File Size: {}", format_size(meta.len()));
+                let filename = Path::new(&self.file_path)
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+                let size = formatter::format_size(meta.len());
+                let modified: DateTime<Local> = DateTime::from(meta.modified().unwrap());
+                let permissions = formatter::parse_permissions(meta.permissions().mode() as u16);
+
+                println!("########## File: {} ##########", filename);
+                println!("Size: {}", size);
+                println!("Permissions: {}", permissions);
+                println!("Date Modified: {}", modified.format("%D %H:%M").to_string());
+                println!("################################\n");
             }
             Err(error) => {
                 println!("Error getting file metadata: {error}");
@@ -85,27 +103,6 @@ impl App {
             print!("{line}");
         }
     }
-}
-
-fn format_size(size: u64) -> String {
-    if size < 1000 {
-        return format!("{}B", size);
-    }
-
-    let suffix = vec!["K", "M", "G", "T", "P", "E", "Z", "Y"];
-    let mut current_size = size as f64 / 1000 as f64;
-
-    for s in suffix.iter() {
-        if current_size < 10.0 {
-            return format!("{:.1}{}", current_size - 0.0499 as f64, s);
-        } else if current_size < 1000.0 {
-            return format!("{:.1}{}", current_size, s);
-        }
-
-        current_size /= 1000.0
-    }
-
-    return "".to_string();
 }
 
 pub fn run() {
