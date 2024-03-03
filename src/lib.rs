@@ -15,21 +15,19 @@ pub struct App {
     pub file_path: String,
     pub file_content: String,
     pub highlighted_lines: Vec<String>,
+    pub theme: String,
 }
 
 impl App {
-    pub fn new(args: &[String]) -> Result<App, &'static str> {
-        if args.len() < 2 {
-            return Err("Not enough arguments");
-        }
-
+    pub fn new(args: &[String]) -> Self {
         let file_path = args[1].to_string();
 
-        Ok(App {
+        App {
             file_path,
             file_content: String::from(""),
             highlighted_lines: Vec::new(),
-        })
+            theme: String::from("base16-ocean.dark"),
+        }
     }
 
     pub fn set_file_content(&mut self) {
@@ -48,12 +46,9 @@ impl App {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
 
-        let mut highlighter = HighlightFile::new(
-            &self.file_path,
-            &syntax_set,
-            &theme_set.themes["base16-ocean.dark"],
-        )
-        .unwrap();
+        let mut highlighter =
+            HighlightFile::new(&self.file_path, &syntax_set, &theme_set.themes[&self.theme])
+                .unwrap();
 
         let mut line = String::new();
 
@@ -86,7 +81,7 @@ impl App {
                 let modified: DateTime<Local> = DateTime::from(meta.modified().unwrap());
                 let permissions = formatter::parse_permissions(meta.permissions().mode() as u16);
 
-                println!("########## File: {} ##########", filename);
+                println!("\n########## File: {} ##########", filename);
                 println!("Size: {}", size);
                 println!("Permissions: {}", permissions);
                 println!("Date Modified: {}", modified.format("%D %H:%M").to_string());
@@ -107,10 +102,12 @@ impl App {
 
 pub fn run() {
     let args: Vec<String> = env::args().collect();
-    let mut app = App::new(&args).unwrap_or_else(|err| {
-        println!("Error parsing arguments: {err}");
-        process::exit(1);
-    });
+
+    if args.len() < 2 {
+        panic!("Must provide a file to tap into");
+    }
+
+    let mut app = App::new(&args);
 
     app.set_file_content();
     app.get_highlighted_lines();

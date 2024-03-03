@@ -33,12 +33,14 @@ pub fn format_size(size: u64) -> String {
     for s in suffix.iter() {
         if current_size < 10.0 {
             return format!("{:.1}{}", current_size - 0.0499 as f64, s);
-        } else if current_size < 1000.0 {
+        }
+
+        if current_size < 1000.0 && current_size >= 10.0 {
             return format!("{:.1}{}", current_size, s);
         }
 
         current_size /= 1000.0
     }
 
-    return String::from("");
+    String::from("")
 }
